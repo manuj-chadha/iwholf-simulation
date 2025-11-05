@@ -25,14 +25,20 @@ public class Experiment {
     private final Config cfg;
     private final Path out;
 
-    public Experiment(Config cfg, Path out){ this.cfg=cfg; this.out=out; }
+    public Experiment(Config cfg, Path out) {
+        this.cfg = cfg;
+        this.out = out;
+    }
 
     public void runRegime(String tag, List<Integer> taskCounts, List<SchedulerFactory> algs) throws Exception {
         int repeats = cfg.getInt("repeats");
         double alpha = cfg.getDouble("alpha_makespan");
-        double beta  = cfg.getDouble("beta_util");
+        double beta = cfg.getDouble("beta_util");
+
+        System.out.println("\n=== Regime: " + tag + " | Tasks: " + taskCounts + " ===");
 
         for (int tasks : taskCounts) {
+            System.out.println("\n--- Running task size: " + tasks + " ---");
             List<ResultRow> rows = new ArrayList<>();
 
             for (int r = 0; r < repeats; r++) {
@@ -41,59 +47,61 @@ public class Experiment {
                 Fitness fitness = new Fitness(alpha, beta, setup.vmMips, setup.cloudletLens);
 
                 for (SchedulerFactory sf : algs) {
-                    MetaheuristicScheduler scheduler = sf.ctor().apply(fitness);
+                    System.out.println("Starting algorithm: " + sf.name() + " [repeat " + (r + 1) + "]");
                     long t0 = System.currentTimeMillis();
+
+                    MetaheuristicScheduler scheduler = sf.ctor().apply(fitness);
                     var res = scheduler.solve(cfg.getInt("iterations"), cfg.getInt("population"), cfg.getInt("groups"));
                     long schedMs = System.currentTimeMillis() - t0;
 
                     double[] vmTimes = fitness.vmTimesFromAssign(res.bestAssign());
-                    double mk  = Fitness.makespan(vmTimes);
+                    double mk = Fitness.makespan(vmTimes);
                     double doi = Fitness.doi(vmTimes);
                     double utl = Fitness.utilization(vmTimes);
 
-                    // Sanity run in CloudSim with the chosen mapping
-//                    double mkSim = runCloudSim(setup, res.bestAssign());
-                    double mkSim = mk + (Math.random() * 0.05 * mk);
-
+                    double mkSim = runCloudSim(setup, res.bestAssign());
+                    System.out.println("Completed " + sf.name() + " | mk=" + String.format("%.4f", mk) + " mkSim=" + String.format("%.4f", mkSim));
 
                     rows.add(new ResultRow(tag, tasks, sf.name(), r, mk, mkSim, doi, utl, res.bestFitness(), schedMs));
                 }
             }
             IO.writeCSV(out.resolve("results_" + tag + "_" + tasks + ".csv"), rows);
+            System.out.println("Saved results for task size " + tasks);
         }
 
+        System.out.println("Aggregating results for regime: " + tag);
         Aggregator.aggregateDir(out,
                 "results_" + tag + "_*.csv",
                 out.resolve("summary_" + tag + ".csv"),
                 cfg.getDouble("success_rate_threshold_ratio"));
+        System.out.println("Summary created: summary_" + tag + ".csv");
     }
 
-    private static record Scenario(double[] vmMips, long[] cloudletLens, List<Vm> vms, List<Cloudlet> cloudlets, List<Host> hosts){}
+    private static record Scenario(double[] vmMips, long[] cloudletLens, List<Vm> vms, List<Cloudlet> cloudlets, List<Host> hosts) {}
 
-    private Scenario buildScenario(long seed, int tasks){
-        Random rng     = new Random(seed);
-        int hosts      = cfg.getInt("hosts");
-        int vmsCount   = cfg.getInt("vms");
-        int hostMips   = cfg.getInt("hostMips");
-        int hostPes    = cfg.getInt("hostPes");
-        int hostRam    = cfg.getInt("hostRam");
-        long hostBw    = cfg.getLong("hostBw");
+    private Scenario buildScenario(long seed, int tasks) {
+        Random rng = new Random(seed);
+        int hosts = cfg.getInt("hosts");
+        int vmsCount = cfg.getInt("vms");
+        int hostMips = cfg.getInt("hostMips");
+        int hostPes = cfg.getInt("hostPes");
+        int hostRam = cfg.getInt("hostRam");
+        long hostBw = cfg.getLong("hostBw");
         long hostStore = cfg.getLong("hostStorage");
 
         List<Integer> vmMipsOptions = Arrays.stream(cfg.get("vmMipsOptions").split(","))
                 .map(String::trim).map(Integer::parseInt).toList();
-        int vmPes    = cfg.getInt("vmPes");
-        int vmRam    = cfg.getInt("vmRam");
-        long vmBw    = cfg.getLong("vmBw");
+        int vmPes = cfg.getInt("vmPes");
+        int vmRam = cfg.getInt("vmRam");
+        long vmBw = cfg.getLong("vmBw");
         long vmStore = cfg.getLong("vmStorage");
 
         int cMin = cfg.getInt("cloudletLengthMin");
         int cMax = cfg.getInt("cloudletLengthMax");
-        int cf   = cfg.getInt("cloudletFileSize");
-        int co   = cfg.getInt("cloudletOutputSize");
+        int cf = cfg.getInt("cloudletFileSize");
+        int co = cfg.getInt("cloudletOutputSize");
         int cpes = cfg.getInt("cloudletPes");
 
-        // ---------- Hosts ----------
         List<Host> hostList = new ArrayList<>();
         for (int i = 0; i < hosts; i++) {
             List<Pe> pes = new ArrayList<>();
@@ -103,7 +111,6 @@ public class Experiment {
             hostList.add(h);
         }
 
-        // ---------- VMs ----------
         List<Vm> vms = new ArrayList<>();
         double[] vmMips = new double[vmsCount];
         for (int i = 0; i < vmsCount; i++) {
@@ -115,11 +122,9 @@ public class Experiment {
             vmMips[i] = mips;
         }
 
-        // ---------- Cloudlets ----------
-        // Use partial utilization to prevent RAM/BW overcommit warnings:
-        UtilizationModel umCpu = new UtilizationModelDynamic(0.5);  // 50% CPU
-        UtilizationModel umRam = new UtilizationModelDynamic(0.2);  // 20% RAM
-        UtilizationModel umBw  = new UtilizationModelDynamic(0.2);  // 20% BW
+        UtilizationModel umCpu = new UtilizationModelDynamic(0.5);
+        UtilizationModel umRam = new UtilizationModelDynamic(0.2);
+        UtilizationModel umBw = new UtilizationModelDynamic(0.2);
 
         List<Cloudlet> cloudlets = new ArrayList<>();
         long[] clLens = new long[tasks];
@@ -138,7 +143,7 @@ public class Experiment {
         return new Scenario(vmMips, clLens, vms, cloudlets, hostList);
     }
 
-    private double runCloudSim(Scenario sc, int[] assign){
+    private double runCloudSim(Scenario sc, int[] assign) {
         CloudSim sim = new CloudSim();
         new DatacenterSimple(sim, sc.hosts, new VmAllocationPolicySimple());
         DatacenterBrokerSimple broker = new DatacenterBrokerSimple(sim);
@@ -170,9 +175,16 @@ public class Experiment {
         public ResultRow(String regime, int tasks, String algo, int repeat,
                          double mkA, double mkS, double doi, double util,
                          double bestF, long schedMs) {
-            this.regime = regime; this.tasks = tasks; this.algo = algo; this.repeat = repeat;
-            this.makespanAnalytic = mkA; this.makespanSim = mkS; this.doi = doi; this.utilization = util;
-            this.bestFitness = bestF; this.schedulerMs = schedMs;
+            this.regime = regime;
+            this.tasks = tasks;
+            this.algo = algo;
+            this.repeat = repeat;
+            this.makespanAnalytic = mkA;
+            this.makespanSim = mkS;
+            this.doi = doi;
+            this.utilization = util;
+            this.bestFitness = bestF;
+            this.schedulerMs = schedMs;
         }
     }
 }

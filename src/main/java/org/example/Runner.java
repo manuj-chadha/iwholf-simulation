@@ -30,6 +30,7 @@ public class Runner {
 
         Experiment exp = new Experiment(cfg, out);
         exp.runRegime("small", small, algs);
+
         exp.runRegime("large", large, algs);
     }
 
