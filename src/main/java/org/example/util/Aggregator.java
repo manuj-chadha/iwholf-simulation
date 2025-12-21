@@ -84,11 +84,13 @@ public class Aggregator {
         List<Map<String,String>> rows = new ArrayList<>();
         try (BufferedReader br = Files.newBufferedReader(f)) {
             String header = br.readLine(); if (header == null) return rows;
-            String[] h = header.split(",");
+//            String[] h = header.split(",");
+            String[] h = header.replace("\"", "").split(",");
             String line;
             while ((line = br.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
-                String[] v = line.split(",", -1);
+//                String[] v = line.split(",", -1);
+                String[] v = line.replace("\"", "").split(",", -1);
                 Map<String,String> m = new HashMap<>();
                 for (int i = 0; i < h.length && i < v.length; i++) m.put(h[i], v[i]);
                 rows.add(m);

@@ -5,9 +5,15 @@ public abstract class MetaheuristicScheduler {
     protected final Fitness fit;
     protected final Random rng;
 
-    public MetaheuristicScheduler(Fitness fit){
+    // main constructor: fully controlled seed
+    public MetaheuristicScheduler(Fitness fit, long seed){
         this.fit = fit;
-        this.rng = new Random();
+        this.rng = new Random(seed);
+    }
+
+    // optional: default constructor for "just be random"
+    public MetaheuristicScheduler(Fitness fit){
+        this(fit, System.currentTimeMillis());
     }
 
     public abstract Result solve(int iterations, int population, int groups);
@@ -19,7 +25,11 @@ public abstract class MetaheuristicScheduler {
         return a;
     }
 
-    protected static int[] copy(int[] x){ int[] y=new int[x.length]; System.arraycopy(x,0,y,0,x.length); return y; }
+    protected static int[] copy(int[] x){
+        int[] y=new int[x.length];
+        System.arraycopy(x,0,y,0,x.length);
+        return y;
+    }
 
     public record Result(int[] bestAssign, double bestFitness, long millis){}
 }

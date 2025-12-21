@@ -50,7 +50,8 @@ public class Experiment {
                     System.out.println("Starting algorithm: " + sf.name() + " [repeat " + (r + 1) + "]");
                     long t0 = System.currentTimeMillis();
 
-                    MetaheuristicScheduler scheduler = sf.ctor().apply(fitness);
+                    MetaheuristicScheduler scheduler = sf.ctor().apply(fitness, seed);
+
                     var res = scheduler.solve(cfg.getInt("iterations"), cfg.getInt("population"), cfg.getInt("groups"));
                     long schedMs = System.currentTimeMillis() - t0;
 
@@ -60,7 +61,9 @@ public class Experiment {
                     double utl = Fitness.utilization(vmTimes);
 
                     double mkSim = runCloudSim(setup, res.bestAssign());
-                    System.out.println("Completed " + sf.name() + " | mk=" + String.format("%.4f", mk) + " mkSim=" + String.format("%.4f", mkSim));
+                    System.out.println("Completed " + sf.name()
+                            + " | mk=" + String.format("%.4f", mk)
+                            + " mkSim=" + String.format("%.4f", mkSim));
 
                     rows.add(new ResultRow(tag, tasks, sf.name(), r, mk, mkSim, doi, utl, res.bestFitness(), schedMs));
                 }
